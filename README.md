@@ -1,3 +1,3 @@
-# lch
+# hsl
 
-Adjust sRGB colors via Oklch.
+Adjust sRGB colors via Okhsl.
