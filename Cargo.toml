@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.50", features = ["derive"] }
+palette = "0.7.6"
+
+[lints]
+clippy.pedantic = { level = "warn", priority = -1 }
