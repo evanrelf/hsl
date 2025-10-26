@@ -3,6 +3,8 @@ use clap::Parser as _;
 use palette::{Clamp as _, IntoColor as _, IsWithinBounds as _, Okhsl, OklabHue, Srgb};
 use std::io;
 
+// TODO: Output in color if `stdout.is_terminal()`
+
 /// Adjust sRGB colors via Okhsl
 #[derive(clap::Parser)]
 #[command(disable_help_subcommand = true)]
