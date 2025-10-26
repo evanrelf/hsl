@@ -48,6 +48,10 @@ enum Adjustment {
     /// Decrease
     #[value(name = "-")]
     Decrease,
+
+    /// Percentage
+    #[value(name = "%")]
+    Percentage,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -70,17 +74,26 @@ fn hsl(args: &Args, input: &str) -> anyhow::Result<String> {
     let mut okhsl: Okhsl = input_rgb_f32.into_color();
 
     match (&args.component, &args.adjustment) {
-        (Component::Hue, Adjustment::Set) => okhsl.hue = OklabHue::new(args.value),
-        (Component::Hue, Adjustment::Increase) => okhsl.hue += OklabHue::new(args.value),
-        (Component::Hue, Adjustment::Decrease) => okhsl.hue -= OklabHue::new(args.value),
+        (Component::Hue, _) => match &args.adjustment {
+            Adjustment::Set => okhsl.hue = OklabHue::from_degrees(args.value - 180.0),
+            Adjustment::Increase => okhsl.hue += OklabHue::from_degrees(args.value - 180.0),
+            Adjustment::Decrease => okhsl.hue -= OklabHue::from_degrees(args.value - 180.0),
+            Adjustment::Percentage => {
+                okhsl.hue = OklabHue::from_degrees(
+                    ((okhsl.hue.into_degrees() + 180.0) * (args.value / 100.0)) - 180.0,
+                );
+            }
+        },
 
         (Component::Saturation, Adjustment::Set) => okhsl.saturation = args.value,
         (Component::Saturation, Adjustment::Increase) => okhsl.saturation += args.value,
         (Component::Saturation, Adjustment::Decrease) => okhsl.saturation -= args.value,
+        (Component::Saturation, Adjustment::Percentage) => okhsl.saturation *= args.value / 100.0,
 
         (Component::Lightness, Adjustment::Set) => okhsl.lightness = args.value,
         (Component::Lightness, Adjustment::Increase) => okhsl.lightness += args.value,
         (Component::Lightness, Adjustment::Decrease) => okhsl.lightness -= args.value,
+        (Component::Lightness, Adjustment::Percentage) => okhsl.lightness *= args.value / 100.0,
     }
 
     if args.no_clamp {
