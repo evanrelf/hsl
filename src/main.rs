@@ -1,9 +1,8 @@
 use anyhow::Context as _;
 use clap::Parser as _;
+use colored::Colorize as _;
 use palette::{Clamp as _, IntoColor as _, IsWithinBounds as _, Okhsl, OklabHue, Srgb};
-use std::io;
-
-// TODO: Output in color if `stdout.is_terminal()`
+use std::{env, io};
 
 /// Adjust sRGB colors via Okhsl
 #[derive(clap::Parser)]
@@ -56,19 +55,41 @@ enum Adjustment {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    for line in io::stdin().lines() {
-        let input = line.context("Failed to parse input into UTF-8 string")?;
-        let output = hsl(&args, &input)?;
-        println!("{output}");
+
+    // SAFETY: This program is single-threaded.
+    unsafe {
+        // `colored` does a bad job of detecting whether a terminal (e.g. Ghostty) has truecolor
+        // support. I don't care about supporting legacy terminals, so I'm forcing it on. You can
+        // turn colors off with `NO_COLOR`.
+        env::set_var("COLORTERM", "truecolor");
     }
+
+    for line in io::stdin().lines() {
+        let input_string = line.context("Failed to read input bytes as UTF-8 string")?;
+
+        let input_rgb: Srgb<u8> = input_string
+            .parse()
+            .context("Failed to parse input string as sRGB color")?;
+
+        let output_rgb = hsl(&args, input_rgb)?;
+
+        let hash = if input_string.starts_with('#') {
+            "#"
+        } else {
+            ""
+        };
+
+        let output_string = format!("{hash}{output_rgb:x}")
+            .truecolor(output_rgb.red, output_rgb.green, output_rgb.blue)
+            .reversed();
+
+        println!("{output_string}");
+    }
+
     Ok(())
 }
 
-fn hsl(args: &Args, input: &str) -> anyhow::Result<String> {
-    let input_rgb_u8: Srgb<u8> = input
-        .parse()
-        .context("Failed to parse input into sRGB color")?;
-
+fn hsl(args: &Args, input_rgb_u8: Srgb<u8>) -> anyhow::Result<Srgb<u8>> {
     let input_rgb_f32: Srgb<f32> = input_rgb_u8.into_format();
 
     let mut okhsl: Okhsl = input_rgb_f32.into_color();
@@ -107,9 +128,5 @@ fn hsl(args: &Args, input: &str) -> anyhow::Result<String> {
     let output_rgb_f32: Srgb<f32> = okhsl.into_color();
     let output_rgb_u8: Srgb<u8> = output_rgb_f32.into_format();
 
-    let hash = if input.starts_with('#') { "#" } else { "" };
-
-    let output = format!("{hash}{output_rgb_u8:x}");
-
-    Ok(output)
+    Ok(output_rgb_u8)
 }
