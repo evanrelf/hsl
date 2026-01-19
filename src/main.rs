@@ -8,7 +8,7 @@ use std::{env, io};
 #[derive(clap::Parser)]
 #[command(disable_help_subcommand = true)]
 struct Args {
-    component: Component,
+    parameter: Parameter,
 
     adjustment: Adjustment,
 
@@ -20,7 +20,7 @@ struct Args {
 }
 
 #[derive(clap::ValueEnum, Clone)]
-enum Component {
+enum Parameter {
     /// Hue (0.0 to 360.0)
     #[value(name = "h")]
     Hue,
@@ -94,8 +94,8 @@ fn hsl(args: &Args, input_rgb_u8: Srgb<u8>) -> anyhow::Result<Srgb<u8>> {
 
     let mut okhsl: Okhsl = input_rgb_f32.into_color();
 
-    match (&args.component, &args.adjustment) {
-        (Component::Hue, _) => match &args.adjustment {
+    match (&args.parameter, &args.adjustment) {
+        (Parameter::Hue, _) => match &args.adjustment {
             Adjustment::Set => okhsl.hue = OklabHue::from_degrees(args.value - 180.0),
             Adjustment::Increase => okhsl.hue += OklabHue::from_degrees(args.value - 180.0),
             Adjustment::Decrease => okhsl.hue -= OklabHue::from_degrees(args.value - 180.0),
@@ -106,15 +106,15 @@ fn hsl(args: &Args, input_rgb_u8: Srgb<u8>) -> anyhow::Result<Srgb<u8>> {
             }
         },
 
-        (Component::Saturation, Adjustment::Set) => okhsl.saturation = args.value,
-        (Component::Saturation, Adjustment::Increase) => okhsl.saturation += args.value,
-        (Component::Saturation, Adjustment::Decrease) => okhsl.saturation -= args.value,
-        (Component::Saturation, Adjustment::Percentage) => okhsl.saturation *= args.value / 100.0,
+        (Parameter::Saturation, Adjustment::Set) => okhsl.saturation = args.value,
+        (Parameter::Saturation, Adjustment::Increase) => okhsl.saturation += args.value,
+        (Parameter::Saturation, Adjustment::Decrease) => okhsl.saturation -= args.value,
+        (Parameter::Saturation, Adjustment::Percentage) => okhsl.saturation *= args.value / 100.0,
 
-        (Component::Lightness, Adjustment::Set) => okhsl.lightness = args.value,
-        (Component::Lightness, Adjustment::Increase) => okhsl.lightness += args.value,
-        (Component::Lightness, Adjustment::Decrease) => okhsl.lightness -= args.value,
-        (Component::Lightness, Adjustment::Percentage) => okhsl.lightness *= args.value / 100.0,
+        (Parameter::Lightness, Adjustment::Set) => okhsl.lightness = args.value,
+        (Parameter::Lightness, Adjustment::Increase) => okhsl.lightness += args.value,
+        (Parameter::Lightness, Adjustment::Decrease) => okhsl.lightness -= args.value,
+        (Parameter::Lightness, Adjustment::Percentage) => okhsl.lightness *= args.value / 100.0,
     }
 
     if args.no_clamp {
