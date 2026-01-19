@@ -4,7 +4,7 @@ use colored::Colorize as _;
 use palette::{Clamp as _, IntoColor as _, IsWithinBounds as _, Okhsl, OklabHue, Srgb};
 use std::{env, io};
 
-/// Adjust sRGB colors via Okhsl
+/// Adjust HSL of sRGB via Okhsl
 #[derive(clap::Parser)]
 #[command(disable_help_subcommand = true)]
 struct Args {
