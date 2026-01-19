@@ -92,8 +92,16 @@ fn main() -> anyhow::Result<()> {
 fn hsl(args: &Args, input_rgb_u8: Srgb<u8>) -> anyhow::Result<Srgb<u8>> {
     let input_rgb_f32: Srgb<f32> = input_rgb_u8.into_format();
 
-    let mut okhsl: Okhsl = input_rgb_f32.into_color();
+    let input_okhsl: Okhsl = input_rgb_f32.into_color();
+    let output_okhsl: Okhsl = hsl_okhsl(args, input_okhsl)?;
 
+    let output_rgb_f32: Srgb<f32> = output_okhsl.into_color();
+    let output_rgb_u8: Srgb<u8> = output_rgb_f32.into_format();
+
+    Ok(output_rgb_u8)
+}
+
+fn hsl_okhsl(args: &Args, mut okhsl: Okhsl) -> anyhow::Result<Okhsl> {
     match (&args.parameter, &args.adjustment) {
         (Parameter::Hue, _) => match &args.adjustment {
             Adjustment::Set => okhsl.hue = OklabHue::from_degrees(args.value - 180.0),
@@ -125,8 +133,5 @@ fn hsl(args: &Args, input_rgb_u8: Srgb<u8>) -> anyhow::Result<Srgb<u8>> {
         okhsl = okhsl.clamp();
     }
 
-    let output_rgb_f32: Srgb<f32> = okhsl.into_color();
-    let output_rgb_u8: Srgb<u8> = output_rgb_f32.into_format();
-
-    Ok(output_rgb_u8)
+    Ok(okhsl)
 }
