@@ -1,60 +1,112 @@
 use anyhow::Context as _;
-use clap::Parser as _;
 use colored::Colorize as _;
 use palette::{Clamp as _, IntoColor as _, IsWithinBounds as _, Okhsl, OklabHue, Srgb};
-use std::{env, io};
+use std::{env, io, process};
 
-/// Adjust HSL of sRGB via Okhsl
-#[derive(clap::Parser)]
-#[command(disable_help_subcommand = true)]
 struct Args {
-    parameter: Parameter,
-
-    adjustment: Adjustment,
-
-    value: f32,
-
-    /// Don't clamp values
-    #[arg(long)]
+    adjustments: Vec<(Parameter, Adjustment, f32)>,
     no_clamp: bool,
 }
 
-#[derive(clap::ValueEnum, Clone)]
 enum Parameter {
-    /// Hue (0.0 to 360.0)
-    #[value(name = "h")]
     Hue,
-
-    /// Saturation (0.0 to 0.4)
-    #[value(name = "s")]
     Saturation,
-
-    /// Lightness (0.0 to 1.0)
-    #[value(name = "l")]
     Lightness,
 }
 
-#[derive(clap::ValueEnum, Clone)]
 enum Adjustment {
-    /// Set
-    #[value(name = "=")]
     Set,
-
-    /// Increase
-    #[value(name = "+")]
     Increase,
-
-    /// Decrease
-    #[value(name = "-")]
     Decrease,
-
-    /// Percentage
-    #[value(name = "%")]
     Percentage,
 }
 
+const HELP: &str = "\
+Adjust HSL of sRGB via Okhsl
+
+Usage: hsl [OPTIONS] <PARAMETER ADJUSTMENT VALUE>...
+
+Arguments:
+  <PARAMETER>   [possible values: h, s, l]
+  <ADJUSTMENT>  [possible values: =, +, -, %]
+  <VALUE>
+
+Options:
+      --no-clamp  Don't clamp values
+  -h, --help      Print help
+
+Examples:
+  echo '#c0ffee' | hsl h + 30 s + 0.1
+  echo '#bada55' | hsl s + 0.2
+  echo '#facade' | hsl h - 60 l + 0.1\
+";
+
+fn parse_args() -> anyhow::Result<Args> {
+    use lexopt::{Parser, prelude::*};
+
+    let mut parser = Parser::from_env();
+    let mut no_clamp = false;
+    let mut positionals: Vec<String> = Vec::new();
+
+    while let Some(arg) = parser.next()? {
+        match arg {
+            Short('h') | Long("help") => {
+                println!("{HELP}");
+                process::exit(0);
+            }
+            Long("no-clamp") => {
+                no_clamp = true;
+            }
+            Value(val) => {
+                positionals.push(val.string()?);
+            }
+            _ => return Err(arg.unexpected().into()),
+        }
+    }
+
+    if positionals.is_empty() {
+        anyhow::bail!("requires at least 3 positional arguments: <PARAMETER> <ADJUSTMENT> <VALUE>");
+    }
+
+    if !positionals.len().is_multiple_of(3) {
+        anyhow::bail!(
+            "positional arguments must come in groups of 3: <PARAMETER> <ADJUSTMENT> <VALUE>"
+        );
+    }
+
+    let mut adjustments = Vec::new();
+
+    for chunk in positionals.chunks(3) {
+        let parameter = match chunk[0].as_str() {
+            "h" => Parameter::Hue,
+            "s" => Parameter::Saturation,
+            "l" => Parameter::Lightness,
+            other => anyhow::bail!("invalid parameter '{other}' [possible values: h, s, l]"),
+        };
+
+        let adjustment = match chunk[1].as_str() {
+            "=" => Adjustment::Set,
+            "+" => Adjustment::Increase,
+            "-" => Adjustment::Decrease,
+            "%" => Adjustment::Percentage,
+            other => anyhow::bail!("invalid adjustment '{other}' [possible values: =, +, -, %]"),
+        };
+
+        let value: f32 = chunk[2]
+            .parse()
+            .with_context(|| format!("invalid value '{}': not a valid number", chunk[2]))?;
+
+        adjustments.push((parameter, adjustment, value));
+    }
+
+    Ok(Args {
+        adjustments,
+        no_clamp,
+    })
+}
+
 fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    let args = parse_args()?;
 
     // SAFETY: This program is single-threaded.
     unsafe {
@@ -102,27 +154,29 @@ fn hsl(args: &Args, input_rgb_u8: Srgb<u8>) -> anyhow::Result<Srgb<u8>> {
 }
 
 fn hsl_okhsl(args: &Args, mut okhsl: Okhsl) -> anyhow::Result<Okhsl> {
-    match (&args.parameter, &args.adjustment) {
-        (Parameter::Hue, _) => match &args.adjustment {
-            Adjustment::Set => okhsl.hue = OklabHue::from_degrees(args.value - 180.0),
-            Adjustment::Increase => okhsl.hue += OklabHue::from_degrees(args.value - 180.0),
-            Adjustment::Decrease => okhsl.hue -= OklabHue::from_degrees(args.value - 180.0),
-            Adjustment::Percentage => {
-                okhsl.hue = OklabHue::from_degrees(
-                    ((okhsl.hue.into_degrees() + 180.0) * (args.value / 100.0)) - 180.0,
-                );
-            }
-        },
+    for (parameter, adjustment, value) in &args.adjustments {
+        match (parameter, adjustment) {
+            (Parameter::Hue, _) => match adjustment {
+                Adjustment::Set => okhsl.hue = OklabHue::from_degrees(value - 180.0),
+                Adjustment::Increase => okhsl.hue += OklabHue::from_degrees(value - 180.0),
+                Adjustment::Decrease => okhsl.hue -= OklabHue::from_degrees(value - 180.0),
+                Adjustment::Percentage => {
+                    okhsl.hue = OklabHue::from_degrees(
+                        ((okhsl.hue.into_degrees() + 180.0) * (value / 100.0)) - 180.0,
+                    );
+                }
+            },
 
-        (Parameter::Saturation, Adjustment::Set) => okhsl.saturation = args.value,
-        (Parameter::Saturation, Adjustment::Increase) => okhsl.saturation += args.value,
-        (Parameter::Saturation, Adjustment::Decrease) => okhsl.saturation -= args.value,
-        (Parameter::Saturation, Adjustment::Percentage) => okhsl.saturation *= args.value / 100.0,
+            (Parameter::Saturation, Adjustment::Set) => okhsl.saturation = *value,
+            (Parameter::Saturation, Adjustment::Increase) => okhsl.saturation += value,
+            (Parameter::Saturation, Adjustment::Decrease) => okhsl.saturation -= value,
+            (Parameter::Saturation, Adjustment::Percentage) => okhsl.saturation *= value / 100.0,
 
-        (Parameter::Lightness, Adjustment::Set) => okhsl.lightness = args.value,
-        (Parameter::Lightness, Adjustment::Increase) => okhsl.lightness += args.value,
-        (Parameter::Lightness, Adjustment::Decrease) => okhsl.lightness -= args.value,
-        (Parameter::Lightness, Adjustment::Percentage) => okhsl.lightness *= args.value / 100.0,
+            (Parameter::Lightness, Adjustment::Set) => okhsl.lightness = *value,
+            (Parameter::Lightness, Adjustment::Increase) => okhsl.lightness += value,
+            (Parameter::Lightness, Adjustment::Decrease) => okhsl.lightness -= value,
+            (Parameter::Lightness, Adjustment::Percentage) => okhsl.lightness *= value / 100.0,
+        }
     }
 
     if args.no_clamp {
