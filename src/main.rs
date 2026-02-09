@@ -3,17 +3,20 @@ use colored::Colorize as _;
 use palette::{Clamp as _, IntoColor as _, IsWithinBounds as _, Okhsl, OklabHue, Srgb};
 use std::{env, io, process};
 
+#[derive(Debug, PartialEq)]
 struct Args {
     adjustments: Vec<(Parameter, Adjustment, f32)>,
     no_clamp: bool,
 }
 
+#[derive(Debug, PartialEq)]
 enum Parameter {
     Hue,
     Saturation,
     Lightness,
 }
 
+#[derive(Debug, PartialEq)]
 enum Adjustment {
     Set,
     Increase,
@@ -70,10 +73,14 @@ fn parse_adjustment(s: &str) -> anyhow::Result<(Parameter, Adjustment, f32)> {
     Ok((parameter, adjustment, value))
 }
 
-fn parse_args() -> anyhow::Result<Args> {
+fn parse_args<I>(args: I) -> anyhow::Result<Args>
+where
+    I: IntoIterator,
+    I::Item: Into<std::ffi::OsString>,
+{
     use lexopt::{Parser, prelude::*};
 
-    let mut parser = Parser::from_env();
+    let mut parser = Parser::from_args(args);
     let mut no_clamp = false;
     let mut adjustments = Vec::new();
 
@@ -105,7 +112,7 @@ fn parse_args() -> anyhow::Result<Args> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = parse_args()?;
+    let args = parse_args(std::env::args_os().skip(1))?;
 
     // SAFETY: This program is single-threaded.
     unsafe {
@@ -187,4 +194,113 @@ fn hsl_okhsl(args: &Args, mut okhsl: Okhsl) -> anyhow::Result<Okhsl> {
     }
 
     Ok(okhsl)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_adjustment() {
+        assert_eq!(
+            parse_args(["h+45"]).unwrap(),
+            Args {
+                adjustments: vec![(Parameter::Hue, Adjustment::Increase, 45.0)],
+                no_clamp: false,
+            }
+        );
+    }
+
+    #[test]
+    fn multiple_adjustments() {
+        assert_eq!(
+            parse_args(["h+45", "s-0.1", "l+0.05"]).unwrap(),
+            Args {
+                adjustments: vec![
+                    (Parameter::Hue, Adjustment::Increase, 45.0),
+                    (Parameter::Saturation, Adjustment::Decrease, 0.1),
+                    (Parameter::Lightness, Adjustment::Increase, 0.05),
+                ],
+                no_clamp: false,
+            }
+        );
+    }
+
+    #[test]
+    fn set_operator() {
+        assert_eq!(
+            parse_args(["s=0.5"]).unwrap(),
+            Args {
+                adjustments: vec![(Parameter::Saturation, Adjustment::Set, 0.5)],
+                no_clamp: false,
+            }
+        );
+    }
+
+    #[test]
+    fn percentage_operator() {
+        assert_eq!(
+            parse_args(["s%110"]).unwrap(),
+            Args {
+                adjustments: vec![(Parameter::Saturation, Adjustment::Percentage, 110.0)],
+                no_clamp: false,
+            }
+        );
+    }
+
+    #[test]
+    fn no_clamp_flag() {
+        assert_eq!(
+            parse_args(["--no-clamp", "h+45"]).unwrap(),
+            Args {
+                adjustments: vec![(Parameter::Hue, Adjustment::Increase, 45.0)],
+                no_clamp: true,
+            }
+        );
+    }
+
+    #[test]
+    fn no_args() {
+        let err = parse_args::<[&str; 0]>([]).unwrap_err();
+        assert!(
+            err.to_string().contains("Expected at least one adjustment"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn too_short() {
+        let err = parse_args(["h"]).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid adjustment"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn bad_parameter() {
+        let err = parse_args(["x+10"]).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid parameter"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn bad_operator() {
+        let err = parse_args(["h?10"]).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid operator"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn bad_value() {
+        let err = parse_args(["h+abc"]).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid value"),
+            "unexpected error: {err}"
+        );
+    }
 }
