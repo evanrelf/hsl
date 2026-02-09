@@ -12,7 +12,7 @@ $ echo '#ff0000' | hsl h + 45
 $ hsl -h
 Adjust HSL of sRGB via Okhsl
 
-Usage: hsl [OPTIONS] <PARAMETER> <ADJUSTMENT> <VALUE>
+Usage: hsl [OPTIONS] <PARAMETER ADJUSTMENT VALUE>...
 
 Arguments:
   <PARAMETER>   [possible values: h, s, l]
@@ -21,7 +21,12 @@ Arguments:
 
 Options:
       --no-clamp  Don't clamp values
-  -h, --help      Print help (see more with '--help')
+  -h, --help      Print help
+
+Examples:
+  echo '#c0ffee' | hsl h + 30 s + 0.1
+  echo '#bada55' | hsl s + 0.2
+  echo '#facade' | hsl h - 60 l + 0.1
 ```
 
 ## Resources
