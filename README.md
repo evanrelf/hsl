@@ -30,5 +30,5 @@ Examples:
 ## Resources
 
 - ["Okhsv and Okhsl: Two new color spaces for color picking" by Björn Ottosson](https://bottosson.github.io/posts/colorpicker/)
-- ["sRGB" on Wikipedia](https://en.wikipedia.org/wiki/SRGB)
-- ["Oklab color space" on Wikipedia](https://en.wikipedia.org/wiki/Oklab_color_space)
+- [sRGB on Wikipedia](https://en.wikipedia.org/wiki/SRGB)
+- [Oklab on Wikipedia](https://en.wikipedia.org/wiki/Oklab_color_space)
