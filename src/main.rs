@@ -24,29 +24,58 @@ enum Adjustment {
 const HELP: &str = "\
 Adjust HSL of sRGB via Okhsl
 
-Usage: hsl [OPTIONS] <PARAMETER ADJUSTMENT VALUE>...
+Usage: hsl [OPTIONS] <ADJUSTMENT>...
 
 Arguments:
-  <PARAMETER>   [possible values: h, s, l]
-  <ADJUSTMENT>  [possible values: =, +, -, %]
-  <VALUE>
+  <ADJUSTMENT>  Parameter (h/s/l), operator (=/+/-/%), and value
 
 Options:
       --no-clamp  Don't clamp values
   -h, --help      Print help
 
 Examples:
-  echo '#c0ffee' | hsl h + 30 s + 0.1
-  echo '#bada55' | hsl s + 0.2
-  echo '#facade' | hsl h - 60 l + 0.1\
+  echo '#c0ffee' | hsl h+30 s+0.1
+  echo '#bada55' | hsl s+0.2
+  echo '#facade' | hsl h-60 l+0.1\
 ";
+
+fn parse_adjustment(s: &str) -> anyhow::Result<(Parameter, Adjustment, f32)> {
+    if s.len() < 3 {
+        anyhow::bail!(
+            "Invalid adjustment '{s}'; expected a parameter (h/s/l), operator (=/+/-/%), and value"
+        );
+    }
+
+    let parameter = match &s[0..1] {
+        "h" => Parameter::Hue,
+        "s" => Parameter::Saturation,
+        "l" => Parameter::Lightness,
+        other => anyhow::bail!("Invalid parameter '{other}' in '{s}'; expected h/s/l"),
+    };
+
+    let adjustment = match &s[1..2] {
+        "=" => Adjustment::Set,
+        "+" => Adjustment::Increase,
+        "-" => Adjustment::Decrease,
+        "%" => Adjustment::Percentage,
+        other => {
+            anyhow::bail!("Invalid operator '{other}' in '{s}'; expected =/+/-/%")
+        }
+    };
+
+    let value: f32 = s[2..]
+        .parse()
+        .with_context(|| format!("Invalid value '{}' in '{s}'; expected a number", &s[2..]))?;
+
+    Ok((parameter, adjustment, value))
+}
 
 fn parse_args() -> anyhow::Result<Args> {
     use lexopt::{Parser, prelude::*};
 
     let mut parser = Parser::from_env();
     let mut no_clamp = false;
-    let mut positionals: Vec<String> = Vec::new();
+    let mut adjustments = Vec::new();
 
     while let Some(arg) = parser.next()? {
         match arg {
@@ -57,46 +86,16 @@ fn parse_args() -> anyhow::Result<Args> {
             Long("no-clamp") => {
                 no_clamp = true;
             }
-            Value(val) => {
-                positionals.push(val.string()?);
+            Value(value) => {
+                let adjustment = parse_adjustment(&value.string()?)?;
+                adjustments.push(adjustment);
             }
             _ => return Err(arg.unexpected().into()),
         }
     }
 
-    if positionals.is_empty() {
-        anyhow::bail!("requires at least 3 positional arguments: <PARAMETER> <ADJUSTMENT> <VALUE>");
-    }
-
-    if !positionals.len().is_multiple_of(3) {
-        anyhow::bail!(
-            "positional arguments must come in groups of 3: <PARAMETER> <ADJUSTMENT> <VALUE>"
-        );
-    }
-
-    let mut adjustments = Vec::new();
-
-    for chunk in positionals.chunks(3) {
-        let parameter = match chunk[0].as_str() {
-            "h" => Parameter::Hue,
-            "s" => Parameter::Saturation,
-            "l" => Parameter::Lightness,
-            other => anyhow::bail!("invalid parameter '{other}' [possible values: h, s, l]"),
-        };
-
-        let adjustment = match chunk[1].as_str() {
-            "=" => Adjustment::Set,
-            "+" => Adjustment::Increase,
-            "-" => Adjustment::Decrease,
-            "%" => Adjustment::Percentage,
-            other => anyhow::bail!("invalid adjustment '{other}' [possible values: =, +, -, %]"),
-        };
-
-        let value: f32 = chunk[2]
-            .parse()
-            .with_context(|| format!("invalid value '{}': not a valid number", chunk[2]))?;
-
-        adjustments.push((parameter, adjustment, value));
+    if adjustments.is_empty() {
+        anyhow::bail!("Expected at least one adjustment");
     }
 
     Ok(Args {
